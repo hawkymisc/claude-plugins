@@ -1,6 +1,7 @@
 {
   "name": "gh-board",
-  "version": "0.3.0",
-  "description": "セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する",
+  "version": "0.3.1",
+  "description": "セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" },
   "types": "./types/index.d.ts"
 }
