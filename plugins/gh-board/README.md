@@ -2,6 +2,15 @@
 
 セッション開始時と毎ターン終了時に、GitHub リポジトリの open な PR / Issue を `gh` CLI で取得し、右ペインに表示する Claude Code Mod。
 
+follow if you like : https://x.com/hawkieslab
+
+## インストール
+
+```
+/plugin marketplace add hawkymisc/claude-plugins
+/plugin install gh-board@hawkymisc-claude-plugins
+```
+
 ## できること
 
 - **自動更新**: `session.start` と `turn.complete` で取得（取得中に再要求が来たら終了後に 1 回だけ取り直す）。ペイン右上の `↻` で手動更新。
