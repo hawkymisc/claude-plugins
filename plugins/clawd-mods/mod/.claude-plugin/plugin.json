@@ -1,1 +1,7 @@
-{ "name": "clawd-mods", "version": "0.1.0", "description": "Clawd animates above the prompt by tool use and mirrors to a Cardputer over BLE", "types": "./types/index.d.ts" }
+{
+  "name": "clawd-mods",
+  "version": "0.1.1",
+  "description": "Clawd animates above the prompt by tool use and mirrors to a Cardputer over BLE — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" },
+  "types": "./types/index.d.ts"
+}

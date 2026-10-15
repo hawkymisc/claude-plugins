@@ -1,6 +1,8 @@
 # claude-plugins
 
-Hawkie の Claude Code プラグイン（Mods）マーケットプレイス。
+Hawkies' Lab の Claude Code プラグイン（Mods）マーケットプレイス。
+
+follow if you like : https://x.com/hawkieslab
 
 ## インストール
 
