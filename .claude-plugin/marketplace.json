@@ -1,0 +1,16 @@
+{
+  "name": "hawkymisc-claude-plugins",
+  "owner": { "name": "Hawkie" },
+  "plugins": [
+    {
+      "name": "clawd-mods",
+      "source": "./plugins/clawd-mods/mod",
+      "description": "Clawd animates above the prompt by tool use and mirrors to a Cardputer over BLE"
+    },
+    {
+      "name": "gh-board",
+      "source": "./plugins/gh-board",
+      "description": "セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する"
+    }
+  ]
+}

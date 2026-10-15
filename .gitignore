@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+build/
+.DS_Store
+plugins/clawd-mods/mod/.claude-plugin/types/
+plugins/clawd-mods/PLAN.md

@@ -1,0 +1,6 @@
+{
+  "name": "gh-board",
+  "version": "0.3.0",
+  "description": "セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する",
+  "types": "./types/index.d.ts"
+}
