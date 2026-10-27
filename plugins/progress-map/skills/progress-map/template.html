@@ -1,0 +1,141 @@
+<title>{{PROJECT}} 作業マップ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="progress-map:project" content="{{owner/repo}}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 1カラムの作業台帳。上から「判断待ち → 全体図 → レーン別の表」の順で、要約から詳細へ */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --fg:#1d2330; --muted:#5d6676; --line:#dde1e8;
+  --accent:#2f5bd3; --ready-bg:#e4ebfb;
+  --run:#1f8a5b; --run-bg:#e3f4ec;
+  --wait:#b26a00; --wait-bg:#fbf0dc;
+  --block:#b8323a; --block-bg:#fbe5e6;
+  --done:#6b7280; --done-bg:#eceef2;
+  --sans:"IBM Plex Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1a1f28; --fg:#e6e9ef; --muted:#9aa3b2; --line:#2c3340;
+  --accent:#7d9cf0; --ready-bg:#1c2640;
+  --run:#5cc995; --run-bg:#173327; --wait:#e0a548; --wait-bg:#3a2c14;
+  --block:#ef7a80; --block-bg:#3d1c1f; --done:#9aa3b2; --done-bg:#252b35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --fg:#e6e9ef; --muted:#9aa3b2; --line:#2c3340;
+  --accent:#7d9cf0; --ready-bg:#1c2640;
+  --run:#5cc995; --run-bg:#173327; --wait:#e0a548; --wait-bg:#3a2c14;
+  --block:#ef7a80; --block-bg:#3d1c1f; --done:#9aa3b2; --done-bg:#252b35; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1{font-size:1.7rem;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-size:1.15rem;margin:0 0 12px;text-wrap:balance}
+.meta{color:var(--muted);font-size:.85rem;font-family:var(--mono);display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:6px}
+p{margin:0}
+.lead{color:var(--muted);max-width:68ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.88em;background:var(--done-bg);padding:1px 5px;border-radius:4px}
+.gates{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.gate{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--block);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.gate.wait{border-left-color:var(--wait)}
+.gate.done{border-left-color:var(--done);opacity:.85}
+.gate h3{margin:0;font-size:1rem}
+.gate .tag{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.gate .holds{font-size:.88rem;color:var(--muted)}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto}
+.diagram pre{margin:0;min-width:760px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:.85rem;color:var(--muted);margin-top:10px}
+.pill{display:inline-block;font-size:.76rem;font-weight:500;padding:1px 9px;border-radius:999px;white-space:nowrap}
+.pill.ready{color:var(--accent);background:var(--ready-bg)}
+.pill.run{color:var(--run);background:var(--run-bg)}
+.pill.wait{color:var(--wait);background:var(--wait-bg)}
+.pill.block{color:var(--block);background:var(--block-bg)}
+.pill.done{color:var(--done);background:var(--done-bg)}
+.lane{display:flex;flex-direction:column;gap:10px}
+.lane .note{color:var(--muted);font-size:.9rem;max-width:72ch}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:.78rem;letter-spacing:.06em;color:var(--muted);font-weight:500;background:var(--bg)}
+tr:last-child td{border-bottom:none}
+td.num{font-family:var(--mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.st{white-space:nowrap}
+.foot{color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:14px}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>{{PROJECT}} 作業マップ</h1>
+    <div class="meta">
+      <span>{{YYYY-MM-DD}} 時点</span>
+      <span>出典 {{plan: PLAN.md のパス / issue: open Issue N件}}</span>
+      <span>main {{short-hash}}</span>
+      <span>開いているPR {{N}}本</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>止めているもの（ゲート）</h2>
+    <p class="lead" style="margin-bottom:14px">{{ゲート全体の一文の要約}}</p>
+    <div class="gates">
+      <div class="gate wait">
+        <span class="tag">G1 · あなたの判断</span>
+        <h3>{{判断の中身}}</h3>
+        <p class="holds">止めているもの：{{#番号 …}}</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>全体図</h2>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  classDef ready fill:#e4ebfb,stroke:#2f5bd3,color:#1d2330
+  classDef run fill:#e3f4ec,stroke:#1f8a5b,color:#1d2330
+  classDef wait fill:#fbf0dc,stroke:#b26a00,color:#1d2330
+  classDef block fill:#fbe5e6,stroke:#b8323a,color:#1d2330
+  classDef gate fill:#1d2330,stroke:#1d2330,color:#ffffff
+
+  G1{{"G1 判断の要約"}}:::gate
+  A["#1 着手可の作業"]:::ready
+  B["#2 待ちの作業"]:::block
+  G1 --> B
+  A --> B
+</pre>
+    </div>
+    <div class="legend">
+      <span><span class="pill ready">着手可</span> 前提がそろい、いつでも始められる</span>
+      <span><span class="pill run">進行中</span> ワークツリー・セッションで作業中</span>
+      <span><span class="pill block">待ち</span> 前の作業が終わるまで着手しない</span>
+      <span><span class="pill wait">判断待ち</span> あなたの決定・プレイ次第</span>
+    </div>
+  </section>
+
+  <section class="lane">
+    <h2>進行中</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Issue</th><th>やっていること</th><th>止まる所</th><th>状態</th></tr></thead>
+      <tbody>
+        <tr><td class="num">#{{n}}</td><td>{{内容（ブランチ・ワークツリー）}}</td><td>{{次の区切り}}</td><td class="st"><span class="pill run">進行中</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="lane">
+    <h2>{{レーン名}}</h2>
+    <p class="note">{{レーン内の順序の理由}}</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Issue</th><th>内容</th><th>待っているもの</th><th>状態</th></tr></thead>
+      <tbody>
+        <tr><td class="num">#{{n}}</td><td>{{内容}}</td><td>—</td><td class="st"><span class="pill ready">着手可</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="lane">
+    <h2>最近片付いたもの</h2>
+    <p class="note">{{MM-DD}}：#{{n}} {{内容}}（PR #{{n}}）</p>
+  </section>
+
+  <p class="foot">実機・本番で未確認：{{#番号 内容}}</p>
+</div>

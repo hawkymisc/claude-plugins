@@ -1,0 +1,6 @@
+{
+  "name": "progress-map",
+  "version": "1.1.0",
+  "description": "リポジトリの進捗を1枚の Artifact（作業マップ）にまとめて作成・更新するスキル。PLAN.md か GitHub Issue を出典に選べる — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+}

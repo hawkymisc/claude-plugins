@@ -1,37 +1,31 @@
 {
   "name": "hawkymisc-claude-plugins",
-  "owner": {
-    "name": "Hawkies' Lab",
-    "url": "https://x.com/hawkieslab"
-  },
+  "owner": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" },
   "description": "Claude Code plugins (Mods) by Hawkies' Lab — follow if you like : https://x.com/hawkieslab",
   "plugins": [
     {
       "name": "clawd-mods",
       "source": "./plugins/clawd-mods/mod",
       "description": "Clawd animates above the prompt by tool use and mirrors to a Cardputer over BLE — follow if you like : https://x.com/hawkieslab",
-      "author": {
-        "name": "Hawkies' Lab",
-        "url": "https://x.com/hawkieslab"
-      }
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     },
     {
       "name": "gh-board",
       "source": "./plugins/gh-board",
       "description": "セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する — follow if you like : https://x.com/hawkieslab",
-      "author": {
-        "name": "Hawkies' Lab",
-        "url": "https://x.com/hawkieslab"
-      }
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+    },
+    {
+      "name": "progress-map",
+      "source": "./plugins/progress-map",
+      "description": "リポジトリの進捗を1枚の Artifact（作業マップ）にまとめて作成・更新するスキル。PLAN.md か GitHub Issue を出典に選べる — follow if you like : https://x.com/hawkieslab",
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     },
     {
       "name": "downloads-guard",
       "source": "./plugins/downloads-guard",
       "description": "作業ディレクトリが ~/Downloads のセッションでは、プロンプトとツール実行をすべて拒否する — follow if you like : https://x.com/hawkieslab",
-      "author": {
-        "name": "Hawkies' Lab",
-        "url": "https://x.com/hawkieslab"
-      }
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     }
   ]
 }
