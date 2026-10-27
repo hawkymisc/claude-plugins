@@ -1,0 +1,6 @@
+{
+  "name": "downloads-guard",
+  "version": "0.1.0",
+  "description": "作業ディレクトリが ~/Downloads のセッションでは、プロンプトとツール実行をすべて拒否して作業を始めさせない — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+}
