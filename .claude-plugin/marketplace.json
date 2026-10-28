@@ -20,6 +20,12 @@
       "source": "./plugins/progress-map",
       "description": "リポジトリの進捗を1枚の Artifact（作業マップ）にまとめて作成・更新するスキル。PLAN.md か GitHub Issue を出典に選べる — follow if you like : https://x.com/hawkieslab",
       "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+    },
+    {
+      "name": "downloads-guard",
+      "source": "./plugins/downloads-guard",
+      "description": "作業ディレクトリが ~/Downloads のセッションでは、プロンプトとツール実行をすべて拒否する — follow if you like : https://x.com/hawkieslab",
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     }
   ]
 }
