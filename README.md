@@ -12,6 +12,7 @@ follow if you like : https://x.com/hawkieslab
 /plugin install gh-board@hawkymisc-claude-plugins
 /plugin install progress-map@hawkymisc-claude-plugins
 /plugin install downloads-guard@hawkymisc-claude-plugins
+/plugin install galleria-ai@hawkymisc-claude-plugins
 ```
 
 ## プラグイン
@@ -22,3 +23,4 @@ follow if you like : https://x.com/hawkieslab
 | [gh-board](plugins/gh-board) | セッション開始時とターン終了時に GitHub の PR / Issue 一覧を右ペインに表示する |
 | [progress-map](plugins/progress-map) | リポジトリの進捗を Artifact の作業マップにまとめて作成・更新するスキル（`plan` / `issue` で出典を選ぶ） |
 | [downloads-guard](plugins/downloads-guard) | 作業ディレクトリが `~/Downloads` のセッションでは、プロンプトとツール実行をすべて拒否する |
+| [galleria-ai](plugins/galleria-ai) | GALLERIA のローカルAIを Tailnet REST API で利用する（テキスト生成・画像生成と編集・音声生成）。ComfyUI の API ワークフローを同梱 |

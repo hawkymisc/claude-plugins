@@ -1,0 +1,6 @@
+{
+  "name": "galleria-ai",
+  "version": "1.0.0",
+  "description": "GALLERIA のローカルAIを Tailnet REST API で利用するスキル。テキスト生成・画像生成と編集・音声生成に対応 — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+}

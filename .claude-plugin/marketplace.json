@@ -26,6 +26,12 @@
       "source": "./plugins/downloads-guard",
       "description": "作業ディレクトリが ~/Downloads のセッションでは、プロンプトとツール実行をすべて拒否する — follow if you like : https://x.com/hawkieslab",
       "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+    },
+    {
+      "name": "galleria-ai",
+      "source": "./plugins/galleria-ai",
+      "description": "GALLERIA のローカルAIを Tailnet REST API で利用するスキル。テキスト生成・画像生成と編集・音声生成に対応 — follow if you like : https://x.com/hawkieslab",
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     }
   ]
 }
