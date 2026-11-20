@@ -390,6 +390,37 @@ class CwOtelTest(unittest.TestCase):
         self.assertEqual(len(deletes), 1)
         self.assertNotIn("--profile", deletes[0], "古いプロファイルで削除している")
 
+    def add_extra_credential(self, cid="EXTRA", created="2026-06-01T00:00:00+00:00"):
+        db = json.loads(self.db.read_text())
+        db["users"]["coding-agents-otel-evo-x2"]["creds"].append({"id": cid, "created": created})
+        self.db.write_text(json.dumps(db))
+
+    def cred_ids(self):
+        db = json.loads(self.db.read_text())
+        return sorted(c["id"] for c in db["users"]["coding-agents-otel-evo-x2"]["creds"])
+
+    def test_rotation_at_key_limit_never_deletes_the_key_in_use_first(self):
+        self.run_cli("apply", "--region", "ap-northeast-1", "--targets", "claude",
+                     "--token-source", "aws-cli", "--label", "evo-x2", "--age-days", "90")
+        self.add_extra_credential()  # 使用中の ACCA0001 が最も古い状態で、上限の2つに達している
+        (self.home / ".codex").write_text("ディレクトリではない")  # Codex 側の書き込みを失敗させる
+        out = self.aws_apply("--no-expiry", "--rotate", expect_ok=False)
+        self.assertEqual(out["error"]["code"], "write_failed")
+        self.assertEqual(self.cred_ids(), ["ACCA0001"], "使用中のキーは残り、作りかけのキーは消える")
+        self.assertIn(f"Bearer {SECRET}1", self.settings.read_text())
+        (self.home / ".codex").unlink()
+        out = self.aws_apply("--no-expiry", "--rotate")
+        self.assertEqual(out["old_keys_deleted"], ["ACCA0001"])
+        self.assertEqual(len(self.cred_ids()), 1)
+
+    def test_rotation_at_key_limit_without_record_is_refused(self):
+        self.aws_apply("--age-days", "90")
+        self.add_extra_credential()
+        (self.home / ".config" / "cloudwatch-settings" / "state.json").unlink()
+        out = self.aws_apply("--no-expiry", "--rotate", expect_ok=False)
+        self.assertEqual(out["error"]["code"], "no_free_slot")
+        self.assertEqual(self.cred_ids(), ["ACCA0001", "EXTRA"])
+
     def test_aws_not_logged_in(self):
         out = self.aws_apply("--age-days", "90", env={"FAKE_AWS_NO_CREDS": "1"}, expect_ok=False)
         self.assertEqual(out["error"]["code"], "aws_not_ready")

@@ -639,7 +639,7 @@ class Aws:
         self.ok("iam", "delete-service-specific-credential", "--user-name", user,
                 "--service-specific-credential-id", cred_id)
 
-    def create_key(self, user: str, age_days: int | None, rotate: bool):
+    def create_key(self, user: str, age_days: int | None, rotate: bool, keep_id: str | None = None):
         """IAM ユーザーと API キーを作り、(secret, 情報, 消すべき旧キーID) を返す。secret は表示しない。"""
         cp = self.call("iam", "create-user", "--user-name", user)
         created_user = cp.returncode == 0
@@ -658,8 +658,18 @@ class Aws:
                              for c in existing],
             )
         old_ids = [c.get("ServiceSpecificCredentialId") for c in existing]
-        while len(old_ids) >= 2:  # 1ユーザーあたりの上限に当たらないよう、古いものから空ける
-            self.delete_credential(user, old_ids.pop(0))
+        if len(old_ids) >= 2:
+            # 1ユーザーあたりの上限に当たるので、先に1つ空ける。ただし、いま設定に入っているキー
+            # （keep_id）は、新しいキーを書き込み終えるまで消さない
+            if keep_id not in old_ids:
+                raise Fail(
+                    "no_free_slot",
+                    f"IAM ユーザー {user} の API キーが上限に達していて、どれが使用中か分からない。"
+                    "使っていないキーをコンソールで1つ消してからやり直す",
+                    credentials=old_ids)
+            for cid in [c for c in old_ids if c != keep_id]:
+                self.delete_credential(user, cid)
+            old_ids = [keep_id]
         args = ["iam", "create-service-specific-credential", "--user-name", user,
                 "--service-name", SERVICE_NAME]
         if age_days:
@@ -896,7 +906,8 @@ def cmd_apply(args) -> None:
         ident = aws.identity()
         if not ident.get("ready"):
             raise Fail("aws_not_ready", f"AWS CLI が使える状態ではない: {ident.get('reason')}")
-        token, key_info, old_ids = aws.create_key(plan["iam_user"], args.age_days, args.rotate)
+        token, key_info, old_ids = aws.create_key(plan["iam_user"], args.age_days, args.rotate,
+                                                  keep_id=load_state().get("credential_id"))
         key_info["account"] = ident.get("account")
     elif args.token_source == "clipboard":
         token = validate_token(read_clipboard(), "クリップボード")
