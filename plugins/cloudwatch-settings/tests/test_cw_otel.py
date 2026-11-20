@@ -30,6 +30,8 @@ FAKE_AWS = textwrap.dedent('''\
     db_path = os.environ["FAKE_AWS_DB"]
     db = json.load(open(db_path)) if os.path.exists(db_path) else {"users": {}, "calls": [], "n": 0}
     a = [x for x in sys.argv[1:]]
+    if a[:1] == ["--profile"]:
+        a = a[2:]
     def opt(name):
         return a[a.index(name) + 1] if name in a else None
     db["calls"].append(a)
@@ -359,6 +361,34 @@ class CwOtelTest(unittest.TestCase):
         out = self.run_cli("remove", "--delete-key")
         self.assertEqual(out["key"]["credentials_deleted"], ["ACCA0001"])
         self.assertTrue(out["key"]["iam_user_deleted"])
+
+    def test_partial_rotation_is_rejected_while_other_target_uses_the_key(self):
+        self.aws_apply("--age-days", "90")
+        n_calls = len(self.calls())
+        out = self.run_cli("apply", "--region", "ap-northeast-1", "--targets", "codex",
+                           "--token-source", "aws-cli", "--label", "evo-x2", "--no-expiry", "--rotate",
+                           expect_ok=False)
+        self.assertEqual(out["error"]["code"], "partial_rotate")
+        self.assertEqual(out["error"]["left_behind"], ["claude"])
+        self.assertEqual(len(self.calls()), n_calls, "AWS を呼ぶ前に止まる")
+        db = json.loads(self.db.read_text())
+        self.assertEqual([c["id"] for c in db["users"]["coding-agents-otel-evo-x2"]["creds"]], ["ACCA0001"])
+        # もう片方が別のキーを使っているなら、片方だけの取り替えは通る
+        self.token_file.write_text(SECRET + "imported")
+        self.run_cli("apply", "--region", "ap-northeast-1", "--targets", "claude",
+                     "--token-source", "file", "--token-file", str(self.token_file), "--label", "evo-x2")
+        self.run_cli("apply", "--region", "ap-northeast-1", "--targets", "codex",
+                     "--token-source", "aws-cli", "--label", "evo-x2", "--no-expiry", "--rotate")
+
+    def test_saved_profile_follows_the_latest_created_key(self):
+        self.aws_apply("--age-days", "90", "--aws-profile", "account-a")
+        self.assertEqual(self.run_cli("status")["state"]["aws_profile"], "account-a")
+        self.aws_apply("--age-days", "90", "--rotate")
+        self.assertNotIn("aws_profile", self.run_cli("status")["state"])
+        self.run_cli("remove", "--delete-key")
+        deletes = [c for c in self.calls() if "delete-user" in c]
+        self.assertEqual(len(deletes), 1)
+        self.assertNotIn("--profile", deletes[0], "古いプロファイルで削除している")
 
     def test_aws_not_logged_in(self):
         out = self.aws_apply("--age-days", "90", env={"FAKE_AWS_NO_CREDS": "1"}, expect_ok=False)

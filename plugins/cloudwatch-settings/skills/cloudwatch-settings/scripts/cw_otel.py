@@ -869,6 +869,20 @@ def cmd_apply(args) -> None:
         iam_user = args.iam_user or iam_user_name(label)
         plan["iam_user"] = iam_user
         plan["key_age_days"] = args.age_days
+        if args.rotate:
+            # 取り替えると古いキーは消える。今回の対象に入っていないツールが古いキーを
+            # 使い続けていると送れなくなるので、一部だけの取り替えは受け付けない
+            created_fp = load_state().get("credential_fingerprint")
+            views = {"claude": claude_view(load_claude_settings()), "codex": codex_view()}
+            left_behind = [
+                name for name, view in views.items()
+                if name not in targets and view.get("has_token")
+                and (created_fp is None or view.get("token_fingerprint") == created_fp)
+            ]
+            if left_behind:
+                raise Fail("partial_rotate",
+                           "取り替え対象に入っていないツールが、消すことになるキーをまだ使っている。"
+                           "--targets に含めて一緒に取り替える", left_behind=left_behind)
     if args.token_source == "file" and not args.token_file:
         raise Fail("need_token_file", "--token-source file には --token-file が要る")
 
@@ -950,8 +964,12 @@ def cmd_apply(args) -> None:
         state.update({k: key_info.get(k) for k in
                       ("iam_user", "credential_id", "credential_expires", "account")})
         state["credential_fingerprint"] = fingerprint(token)
+        # キーの記録を置き換えるときは、作成に使ったプロファイルも必ず置き換える
+        # （古いプロファイルが残ると、remove --delete-key が別のアカウントを操作してしまう）
         if args.aws_profile:
             state["aws_profile"] = args.aws_profile
+        else:
+            state.pop("aws_profile", None)
     elif state.get("credential_id") and state.get("credential_fingerprint") != fingerprint(token):
         # 別のキーを取り込んでも、このマシンで作った IAM のキーの記録は消さない
         # （ほかの対象がまだ使っているかもしれず、使っていなくても IAM には残っている）

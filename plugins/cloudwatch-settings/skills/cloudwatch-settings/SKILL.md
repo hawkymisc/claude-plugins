@@ -206,6 +206,7 @@ AWS が公開している定義（aws-observability-accelerator）を取得し�
 | `conflict_codex` | `config.toml` に管理外の `metrics_exporter` がある。Codex のメトリクス送信先は1つだけなので、置き換えてよいか聞く。よければ、その定義だけを取り除いてからやり直す（このファイルにキーはまだ入っていないので、ここは Edit でよい） |
 | `git_tracked` | 設定ファイルの実体がリポジトリ内にある。`.gitignore` に入れる・実体をリポジトリの外へ移す・その対象を外す、のどれにするか聞く。承知のうえで続けると言われたときだけ `--allow-git-tracked` |
 | `existing_key` | その IAM ユーザーにはすでにキーがある。シークレットは作成時にしか取れない。取り替える（`--rotate`）か、手元のキーを取り込むかを聞く |
+| `partial_rotate` | `--rotate` の対象に入っていないツール（`left_behind`）が、消すことになるキーをまだ使っている。`--targets` を外して両方まとめて取り替える |
 | `aws_not_ready` | 手順2 (a) の「`ready` が `false` のとき」へ |
 | `aws_failed` | `message` に AWS CLI のエラーが入っている。権限不足（`iam:CreateUser`、`iam:AttachUserPolicy`、`iam:CreateServiceSpecificCredential`、`cloudwatch:PutDashboard`）、または AWS CLI が古い。原因を示し、コンソールでキーを作る方法に切り替えるか聞く |
 | `no_token` / `bad_token` / `no_clipboard` | コピーし直すか、ファイルで渡してもらう |
