@@ -134,8 +134,18 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def real_path(path: Path) -> Path:
+    """シンボリックリンクをたどった先。書き込み・削除は必ずここに対して行う。"""
+    return Path(os.path.realpath(str(path)))
+
+
 def write_private(path: Path, text: str, backup: bool = True) -> None:
-    """同じディレクトリの一時ファイル経由で置き換える。POSIX では 0600 にする。"""
+    """実体と同じディレクトリの一時ファイル経由で置き換える。POSIX では 0600 にする。
+
+    path がシンボリックリンクなら、リンクは残してリンク先を書き換える（リンクを通常ファイルに
+    置き換えると、リンクのある場所＝別のリポジトリなどにキーが書かれてしまう）。
+    """
+    path = real_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # 控えを取るのは、まだキーが入っていない版だけ（キーの写しを増やさない）
     if backup and path.exists() and "Bearer " not in read_text(path):
@@ -196,7 +206,7 @@ def tool_info(name: str) -> dict:
 def git_tracked(path: Path) -> dict | None:
     """設定ファイルの実体が git の作業ツリー内にあり、ignore されていなければ情報を返す。"""
     try:
-        real = Path(os.path.realpath(str(path)))
+        real = real_path(path)
     except OSError:
         return None
     for parent in real.parents:
@@ -343,7 +353,24 @@ def claude_apply(settings: dict, region: str, token: str, attrs: dict) -> dict:
     return settings
 
 
-def claude_remove(settings: dict) -> bool:
+def overridden_attrs(settings: dict, attrs: dict, state: dict) -> dict:
+    """このスキルが上書きすることになる、利用者の元の属性値（remove で戻すために覚えておく）。"""
+    env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
+    before = parse_attrs(env.get("OTEL_RESOURCE_ATTRIBUTES", ""))
+    prev_managed = parse_attrs(state.get("resource_attributes", ""))
+    prev_overridden = state.get("claude_attrs_overridden") or {}
+    out = {}
+    for k in attrs:
+        ours_already = k in prev_managed and before.get(k) == prev_managed[k]
+        if k in before and not ours_already:
+            if before[k] != attrs[k]:
+                out[k] = before[k]
+        elif k in prev_overridden:
+            out[k] = prev_overridden[k]
+    return out
+
+
+def claude_remove(settings: dict, state: dict) -> bool:
     env = settings.get("env")
     if not isinstance(env, dict):
         return False
@@ -355,7 +382,22 @@ def claude_remove(settings: dict) -> bool:
     other = [k for k in env if k in ("OTEL_LOGS_EXPORTER", "OTEL_TRACES_EXPORTER")]
     if not other:
         env.pop("CLAUDE_CODE_ENABLE_TELEMETRY", None)
-        env.pop("OTEL_RESOURCE_ATTRIBUTES", None)
+    # 属性は、このスキルが入れた値のままのものだけを外し、上書きした元の値があれば戻す。
+    # 記録（state）がなければ、どれが自分のものか分からないので触らない
+    managed = parse_attrs(state.get("resource_attributes", ""))
+    overridden = state.get("claude_attrs_overridden") or {}
+    if managed and "OTEL_RESOURCE_ATTRIBUTES" in env:
+        current = parse_attrs(env["OTEL_RESOURCE_ATTRIBUTES"])
+        for k, v in managed.items():
+            if current.get(k) == v:
+                if k in overridden:
+                    current[k] = overridden[k]
+                else:
+                    del current[k]
+        if current:
+            env["OTEL_RESOURCE_ATTRIBUTES"] = format_attrs(current)
+        else:
+            env.pop("OTEL_RESOURCE_ATTRIBUTES", None)
     if not env:
         settings.pop("env", None)
     return True
@@ -846,6 +888,7 @@ def cmd_apply(args) -> None:
         token = validate_token(tok, "既存の設定")
 
     # 3. 書き込む。全ファイルの新しい内容を先に作り、途中で失敗したら書いた分を元に戻す
+    attrs_overridden = overridden_attrs(settings, attrs, load_state()) if "claude" in targets else None
     written, originals = [], {}
     try:
         pending = []
@@ -865,7 +908,7 @@ def cmd_apply(args) -> None:
             path = Path(path_str)
             try:
                 if originals.get(path) is None:
-                    path.unlink()
+                    real_path(path).unlink()
                 else:
                     write_private(path, originals[path], backup=False)
                 restored.append(path_str)
@@ -907,6 +950,8 @@ def cmd_apply(args) -> None:
     state.update({"region": args.region, "label": label, "targets": targets,
                   "token_fingerprint": fingerprint(token), "token_source": args.token_source,
                   "resource_attributes": format_attrs(attrs)})
+    if attrs_overridden is not None:
+        state["claude_attrs_overridden"] = attrs_overridden
     if key_info:
         state.update({k: key_info.get(k) for k in
                       ("iam_user", "credential_id", "credential_expires", "account")})
@@ -1038,7 +1083,7 @@ def cmd_remove(args) -> None:
     out = {"ok": True, "removed": {}}
     if "claude" in targets and claude_settings_path().exists():
         settings = load_claude_settings()
-        if claude_remove(settings):
+        if claude_remove(settings, state):
             write_private(claude_settings_path(), dump_settings(settings))
             out["removed"]["claude"] = True
     if "codex" in targets and codex_config_path().exists():

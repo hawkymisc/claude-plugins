@@ -251,6 +251,49 @@ class CwOtelTest(unittest.TestCase):
         (dot / ".gitignore").write_text("claude/settings.json\n")
         self.apply_file()
 
+    def test_tracked_symlink_is_written_through_not_replaced(self):
+        # リポジトリ内で追跡されているのはリンクだけで、実体はリポジトリの外にある
+        dot = self.tmp / "dotfiles"
+        (dot / "claude").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(dot)], check=True)
+        ext = self.tmp / "private" / "settings.json"
+        ext.parent.mkdir()
+        ext.write_text('{"env": {"FOO": "bar"}}')
+        link = dot / "claude" / "settings.json"
+        link.symlink_to(ext)
+        subprocess.run(["git", "-C", str(dot), "add", "-A"], check=True)
+
+        def git_status():
+            return subprocess.run(["git", "-C", str(dot), "status", "--porcelain"],
+                                  capture_output=True, text=True).stdout
+
+        before = git_status()
+        (self.home / ".claude").symlink_to(dot / "claude")
+        self.apply_file("--targets", "claude")
+        self.assertTrue(link.is_symlink(), "リンクが通常ファイルに置き換わっている")
+        self.assertIn(SECRET, ext.read_text())
+        for f in (dot / "claude").iterdir():
+            if not f.is_symlink():
+                self.assertNotIn(SECRET, f.read_text(), f"リポジトリ内にキーが書かれた: {f.name}")
+        self.assertEqual(git_status(), before, "リポジトリに差分が出ている")
+        self.run_cli("remove", "--targets", "claude")
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(json.loads(ext.read_text()), {"env": {"FOO": "bar"}})
+
+    def test_symlink_into_tracked_repo_is_still_refused(self):
+        dot = self.tmp / "dotfiles"
+        dot.mkdir()
+        subprocess.run(["git", "init", "-q", str(dot)], check=True)
+        (dot / "settings.json").write_text("{}")
+        self.settings.parent.mkdir()
+        self.settings.symlink_to(dot / "settings.json")
+        out = self.apply_file("--targets", "claude", expect_ok=False)
+        self.assertEqual(out["error"]["code"], "git_tracked")
+        self.assertEqual((dot / "settings.json").read_text(), "{}")
+        self.apply_file("--targets", "claude", "--allow-git-tracked")
+        self.assertTrue(self.settings.is_symlink(), "承知のうえで書くときもリンクは残す")
+        self.assertIn(SECRET, (dot / "settings.json").read_text())
+
     # ---- AWS CLI でキーを作る
 
     def aws_apply(self, *extra, **kw):
@@ -356,6 +399,26 @@ class CwOtelTest(unittest.TestCase):
         self.assertTrue(out["key"]["iam_user_deleted"])
         self.assertEqual(json.loads(self.db.read_text())["users"], {})
         self.assertFalse((self.home / ".config" / "cloudwatch-settings" / "state.json").exists())
+
+    def test_remove_preserves_preexisting_resource_attributes(self):
+        original = {"env": {"OTEL_RESOURCE_ATTRIBUTES": "department=engineering,team.id=core"}}
+        self.settings.parent.mkdir()
+        self.settings.write_text(json.dumps(original))
+        self.apply_file("--targets", "claude")
+        self.apply_file("--targets", "claude", "--attr", "cost_center=home")  # 2回目でも元の値を忘れない
+        attrs = json.loads(self.settings.read_text())["env"]["OTEL_RESOURCE_ATTRIBUTES"]
+        self.assertIn("department=engineering", attrs)
+        self.assertIn("team.id=macbook", attrs)
+        self.assertNotIn("team.id=core", attrs)
+        self.run_cli("remove", "--targets", "claude")
+        self.assertEqual(json.loads(self.settings.read_text()), original)
+
+    def test_remove_without_state_leaves_resource_attributes_alone(self):
+        self.apply_file("--targets", "claude")
+        (self.home / ".config" / "cloudwatch-settings" / "state.json").unlink()
+        self.run_cli("remove", "--targets", "claude")
+        env = json.loads(self.settings.read_text())["env"]
+        self.assertEqual(list(env), ["OTEL_RESOURCE_ATTRIBUTES"])
 
     def test_verify_posts_a_datapoint_with_the_token(self):
         seen = {}
