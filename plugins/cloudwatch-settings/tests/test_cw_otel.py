@@ -333,6 +333,18 @@ class CwOtelTest(unittest.TestCase):
         self.assertEqual(st["state"]["credential_id"], "ACCA0002")
         self.assertEqual(st["aws_identity"]["account"], "123456789012")
 
+    def test_shell_rc_failure_keeps_setup_and_state(self):
+        (self.home / ".zshrc").mkdir()  # rc ファイルの読み書きを失敗させる
+        out = self.aws_apply("--age-days", "90")
+        self.assertIn("error", out["codex_shell_env"])
+        self.assertTrue(out["warnings"])
+        self.assertIn(f"Bearer {SECRET}1", self.codex.read_text())
+        st = self.run_cli("status")
+        self.assertEqual(st["state"]["credential_id"], "ACCA0001")
+        self.assertEqual(st["state"]["iam_user"], "coding-agents-otel-evo-x2")
+        out = self.run_cli("remove", "--targets", "claude", "--delete-key")
+        self.assertEqual(out["key"]["credentials_deleted"], ["ACCA0001"])
+
     def test_aws_not_logged_in(self):
         out = self.aws_apply("--age-days", "90", env={"FAKE_AWS_NO_CREDS": "1"}, expect_ok=False)
         self.assertEqual(out["error"]["code"], "aws_not_ready")

@@ -148,6 +148,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/cw_otel.py" apply --region ap-northeast-1 -
 python3 "${CLAUDE_SKILL_DIR}/scripts/cw_otel.py" apply --region ap-northeast-1 --token-source clipboard --label gaming-pc
 ```
 
+`ok: true` でも `warnings` が空でなければ、その内容を報告に入れる（例：Codex 用の環境変数を書けなかった。このときは `codex_shell_env.manual_line` の1行を、利用者に自分のシェル設定へ追加してもらう）。
+
 主な引数：
 
 | 引数 | 意味 |

@@ -539,7 +539,11 @@ def shell_env_view() -> dict:
     rc = shell_rc_path()
     if rc is None:
         return {"kind": "unsupported-shell", "shell": os.environ.get("SHELL"), "configured": False}
-    configured = rc.exists() and bool(BLOCK_RE.search(read_text(rc)))
+    try:
+        configured = rc.exists() and bool(BLOCK_RE.search(read_text(rc)))
+    except OSError as e:
+        return {"kind": "rc-file", "path": str(rc), "configured": False,
+                "error": f"読めない（{type(e).__name__}）"}
     return {"kind": "rc-file", "path": str(rc), "configured": configured}
 
 
@@ -925,27 +929,9 @@ def cmd_apply(args) -> None:
         raise Fail("write_failed", f"設定ファイルを書けなかった: {msg}",
                    written=written, restored=restored, new_key_deleted=rolled_back)
 
-    shell_result = None
-    if shell_mode == "auto":
-        try:
-            shell_result = shell_env_apply(attrs)
-        except Fail as e:
-            shell_result = {"error": e.message}
-
-    deleted_old = []
-    for cid in old_ids:
-        try:
-            aws.delete_credential(key_info["iam_user"], cid)
-            deleted_old.append(cid)
-        except Fail:
-            pass
-
-    if args.token_source == "file" and not args.keep_token_file:
-        try:
-            Path(os.path.expanduser(args.token_file)).unlink()
-        except OSError:
-            pass
-
+    # 4. 記録を先に残す。ここから先（シェル、古いキーの削除）は失敗しても設定自体は有効なので、
+    #    警告として返し、キーの ID や元の属性値の記録を失わない
+    warnings = []
     state = load_state()
     state.update({"region": args.region, "label": label, "targets": targets,
                   "token_fingerprint": fingerprint(token), "token_source": args.token_source,
@@ -960,7 +946,35 @@ def cmd_apply(args) -> None:
     elif args.token_source != "existing":
         for k in ("iam_user", "credential_id", "credential_expires", "account"):
             state.pop(k, None)
-    save_state(state)
+    try:
+        save_state(state)
+    except Exception as e:
+        warnings.append(f"state.json を保存できなかった（{type(e).__name__}）。"
+                        "remove や rotate のときは IAM ユーザー名を --iam-user で指定する")
+
+    shell_result = None
+    if shell_mode == "auto":
+        try:
+            shell_result = shell_env_apply(attrs)
+        except Exception as e:
+            msg = e.message if isinstance(e, Fail) else f"{type(e).__name__}: {str(e)[:200]}"
+            shell_result = {"error": msg,
+                            "manual_line": f"export OTEL_RESOURCE_ATTRIBUTES={shlex.quote(format_attrs(attrs))}"}
+            warnings.append("Codex 用の環境変数を設定できなかった。設定ファイルへの書き込みは済んでいる")
+
+    deleted_old = []
+    for cid in old_ids:
+        try:
+            aws.delete_credential(key_info["iam_user"], cid)
+            deleted_old.append(cid)
+        except Exception:
+            warnings.append(f"古い API キー {cid} を消せなかった。コンソールか --rotate で消す")
+
+    if args.token_source == "file" and not args.keep_token_file:
+        try:
+            Path(os.path.expanduser(args.token_file)).unlink()
+        except OSError:
+            pass
 
     emit({
         "ok": True,
@@ -969,6 +983,7 @@ def cmd_apply(args) -> None:
         "key": key_info or None,
         "old_keys_deleted": deleted_old,
         "codex_shell_env": shell_result,
+        "warnings": warnings,
         "token_file_deleted": args.token_source == "file" and not args.keep_token_file,
         "next": ["Claude Code と Codex は、次に起動したセッションから送信を始める",
                  "verify で認証と宛先を確かめる"],
