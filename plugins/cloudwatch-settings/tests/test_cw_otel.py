@@ -345,6 +345,21 @@ class CwOtelTest(unittest.TestCase):
         out = self.run_cli("remove", "--targets", "claude", "--delete-key")
         self.assertEqual(out["key"]["credentials_deleted"], ["ACCA0001"])
 
+    def test_importing_a_key_for_one_target_keeps_the_created_key_record(self):
+        self.aws_apply("--age-days", "90")
+        self.token_file.write_text(SECRET + "imported")
+        out = self.run_cli("apply", "--region", "ap-northeast-1", "--targets", "codex",
+                           "--token-source", "file", "--token-file", str(self.token_file),
+                           "--label", "evo-x2")
+        self.assertTrue(any("ACCA0001" in w for w in out["warnings"]), out["warnings"])
+        st = self.run_cli("status")
+        self.assertEqual(st["state"]["iam_user"], "coding-agents-otel-evo-x2")
+        self.assertEqual(st["created_key_in_use_by"], ["claude"])
+        self.assertFalse(st["same_token_in_both"])
+        out = self.run_cli("remove", "--delete-key")
+        self.assertEqual(out["key"]["credentials_deleted"], ["ACCA0001"])
+        self.assertTrue(out["key"]["iam_user_deleted"])
+
     def test_aws_not_logged_in(self):
         out = self.aws_apply("--age-days", "90", env={"FAKE_AWS_NO_CREDS": "1"}, expect_ok=False)
         self.assertEqual(out["error"]["code"], "aws_not_ready")
@@ -424,6 +439,33 @@ class CwOtelTest(unittest.TestCase):
         self.assertNotIn("team.id=core", attrs)
         self.run_cli("remove", "--targets", "claude")
         self.assertEqual(json.loads(self.settings.read_text()), original)
+
+    def test_attribute_omitted_on_reapply_is_restored(self):
+        original = {"env": {"OTEL_RESOURCE_ATTRIBUTES": "department=engineering"}}
+        self.settings.parent.mkdir()
+        self.settings.write_text(json.dumps(original))
+        self.apply_file("--targets", "claude", "--attr", "department=home")
+        self.assertIn("department=home", self.settings.read_text())
+        self.apply_file("--targets", "claude")  # 今回は department を指定しない
+        attrs = json.loads(self.settings.read_text())["env"]["OTEL_RESOURCE_ATTRIBUTES"]
+        self.assertIn("department=engineering", attrs)
+        self.assertNotIn("department=home", attrs)
+        self.run_cli("remove", "--targets", "claude")
+        self.assertEqual(json.loads(self.settings.read_text()), original)
+
+    def test_user_value_equal_to_ours_survives_remove(self):
+        original = {"env": {"OTEL_RESOURCE_ATTRIBUTES": "team.id=macbook"}}
+        self.settings.parent.mkdir()
+        self.settings.write_text(json.dumps(original))
+        self.apply_file("--targets", "claude")
+        self.run_cli("remove", "--targets", "claude")
+        self.assertEqual(json.loads(self.settings.read_text()), original)
+
+    def test_codex_only_reapply_does_not_disturb_claude_attribute_records(self):
+        self.apply_file()
+        self.apply_file("--targets", "codex", "--label", "other")
+        self.run_cli("remove", "--targets", "claude")
+        self.assertNotIn("env", json.loads(self.settings.read_text()))
 
     def test_remove_without_state_leaves_resource_attributes_alone(self):
         self.apply_file("--targets", "claude")

@@ -337,12 +337,33 @@ def claude_view(settings: dict) -> dict:
     return view
 
 
-def claude_apply(settings: dict, region: str, token: str, attrs: dict) -> dict:
+def strip_managed_attrs(current: dict, state: dict) -> dict:
+    """前回このスキルが入れた属性を外し、そのとき上書きした利用者の値を戻したものを返す。
+
+    外すのは、値がこのスキルの入れたままのものだけ（利用者があとで書き換えた値は残す）。
+    記録（state）がなければ、どれが自分のものか分からないので何も外さない。
+    """
+    managed = state.get("claude_attrs_managed")
+    if managed is None:
+        managed = parse_attrs(state.get("resource_attributes", ""))
+    overridden = state.get("claude_attrs_overridden") or {}
+    out = dict(current)
+    for k, v in managed.items():
+        if out.get(k) == v:
+            if k in overridden:
+                out[k] = overridden[k]
+            else:
+                del out[k]
+    return out
+
+
+def claude_apply(settings: dict, region: str, token: str, attrs: dict, state: dict) -> dict:
     env = settings.get("env")
     if not isinstance(env, dict):
         env = {}
         settings["env"] = env
-    merged = parse_attrs(env.get("OTEL_RESOURCE_ATTRIBUTES", ""))
+    # 前回の分をいったん外してから入れ直す（今回指定されなかった属性を残さない）
+    merged = strip_managed_attrs(parse_attrs(env.get("OTEL_RESOURCE_ATTRIBUTES", "")), state)
     merged.update(attrs)
     env["CLAUDE_CODE_ENABLE_TELEMETRY"] = "1"
     env["OTEL_METRICS_EXPORTER"] = "otlp"
@@ -356,18 +377,8 @@ def claude_apply(settings: dict, region: str, token: str, attrs: dict) -> dict:
 def overridden_attrs(settings: dict, attrs: dict, state: dict) -> dict:
     """このスキルが上書きすることになる、利用者の元の属性値（remove で戻すために覚えておく）。"""
     env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
-    before = parse_attrs(env.get("OTEL_RESOURCE_ATTRIBUTES", ""))
-    prev_managed = parse_attrs(state.get("resource_attributes", ""))
-    prev_overridden = state.get("claude_attrs_overridden") or {}
-    out = {}
-    for k in attrs:
-        ours_already = k in prev_managed and before.get(k) == prev_managed[k]
-        if k in before and not ours_already:
-            if before[k] != attrs[k]:
-                out[k] = before[k]
-        elif k in prev_overridden:
-            out[k] = prev_overridden[k]
-    return out
+    before = strip_managed_attrs(parse_attrs(env.get("OTEL_RESOURCE_ATTRIBUTES", "")), state)
+    return {k: before[k] for k in attrs if k in before}
 
 
 def claude_remove(settings: dict, state: dict) -> bool:
@@ -382,18 +393,8 @@ def claude_remove(settings: dict, state: dict) -> bool:
     other = [k for k in env if k in ("OTEL_LOGS_EXPORTER", "OTEL_TRACES_EXPORTER")]
     if not other:
         env.pop("CLAUDE_CODE_ENABLE_TELEMETRY", None)
-    # 属性は、このスキルが入れた値のままのものだけを外し、上書きした元の値があれば戻す。
-    # 記録（state）がなければ、どれが自分のものか分からないので触らない
-    managed = parse_attrs(state.get("resource_attributes", ""))
-    overridden = state.get("claude_attrs_overridden") or {}
-    if managed and "OTEL_RESOURCE_ATTRIBUTES" in env:
-        current = parse_attrs(env["OTEL_RESOURCE_ATTRIBUTES"])
-        for k, v in managed.items():
-            if current.get(k) == v:
-                if k in overridden:
-                    current[k] = overridden[k]
-                else:
-                    del current[k]
+    if "OTEL_RESOURCE_ATTRIBUTES" in env:
+        current = strip_managed_attrs(parse_attrs(env["OTEL_RESOURCE_ATTRIBUTES"]), state)
         if current:
             env["OTEL_RESOURCE_ATTRIBUTES"] = format_attrs(current)
         else:
@@ -797,6 +798,11 @@ def cmd_status(args) -> None:
         "clipboard_available": clipboard_available(),
         "state": state,
         "key_expiry": expiry_note(state.get("credential_expires")),
+        "created_key_in_use_by": [
+            name for name, view in (("claude", claude), ("codex", codex))
+            if state.get("credential_fingerprint")
+            and view.get("token_fingerprint") == state.get("credential_fingerprint")
+        ] if state.get("credential_id") else None,
     })
 
 
@@ -892,13 +898,14 @@ def cmd_apply(args) -> None:
         token = validate_token(tok, "既存の設定")
 
     # 3. 書き込む。全ファイルの新しい内容を先に作り、途中で失敗したら書いた分を元に戻す
-    attrs_overridden = overridden_attrs(settings, attrs, load_state()) if "claude" in targets else None
+    prev_state = load_state()
+    attrs_overridden = overridden_attrs(settings, attrs, prev_state) if "claude" in targets else None
     written, originals = [], {}
     try:
         pending = []
         if "claude" in targets:
             pending.append((claude_settings_path(),
-                            dump_settings(claude_apply(settings, args.region, token, attrs))))
+                            dump_settings(claude_apply(settings, args.region, token, attrs, prev_state))))
         if "codex" in targets:
             pending.append((codex_config_path(), codex_new_text(args.region, token)))
         for path, _ in pending:
@@ -937,15 +944,20 @@ def cmd_apply(args) -> None:
                   "token_fingerprint": fingerprint(token), "token_source": args.token_source,
                   "resource_attributes": format_attrs(attrs)})
     if attrs_overridden is not None:
+        state["claude_attrs_managed"] = dict(attrs)
         state["claude_attrs_overridden"] = attrs_overridden
     if key_info:
         state.update({k: key_info.get(k) for k in
                       ("iam_user", "credential_id", "credential_expires", "account")})
+        state["credential_fingerprint"] = fingerprint(token)
         if args.aws_profile:
             state["aws_profile"] = args.aws_profile
-    elif args.token_source != "existing":
-        for k in ("iam_user", "credential_id", "credential_expires", "account"):
-            state.pop(k, None)
+    elif state.get("credential_id") and state.get("credential_fingerprint") != fingerprint(token):
+        # 別のキーを取り込んでも、このマシンで作った IAM のキーの記録は消さない
+        # （ほかの対象がまだ使っているかもしれず、使っていなくても IAM には残っている）
+        warnings.append(
+            f"このマシンで作った API キー {state['credential_id']}（IAM ユーザー {state.get('iam_user')}）は"
+            " IAM に残っている。どの対象も使っていなければ、remove --delete-key かコンソールで消す")
     try:
         save_state(state)
     except Exception as e:

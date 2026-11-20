@@ -81,6 +81,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/cw_otel.py" status
 | `claude.conflicts` / `codex.conflicts` | 別の送信先向けの OTel 設定があるか |
 | `git_tracked` | 設定ファイルの実体が git 管理下にあるか |
 | `key_expiry` | `expired` か `expiring_soon` なら、キーの取り替えを勧める |
+| `created_key_in_use_by` | このマシンで作った IAM のキーを、いまどの対象が使っているか。空のリストなら、そのキーは使われないまま IAM に残っている。消すかどうかを聞く |
 | `state.region` | 以前このマシンで使ったリージョン |
 | `platform.wsl` | WSL 内かどうか。Windows 本体と WSL は別のホームなので、両方で使うなら両方で実行が要る |
 
