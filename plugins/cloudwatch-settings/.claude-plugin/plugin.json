@@ -1,0 +1,6 @@
+{
+  "name": "cloudwatch-settings",
+  "version": "0.1.0",
+  "description": "Claude Code と Codex CLI の OpenTelemetry メトリクスを Amazon CloudWatch へ直接送る設定を、1コマンドで行うスキル。API キーは表示せずに各設定ファイルへ書き込む — follow if you like : https://x.com/hawkieslab",
+  "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+}

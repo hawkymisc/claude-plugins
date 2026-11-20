@@ -26,6 +26,12 @@
       "source": "./plugins/downloads-guard",
       "description": "作業ディレクトリが ~/Downloads のセッションでは、プロンプトとツール実行をすべて拒否する — follow if you like : https://x.com/hawkieslab",
       "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
+    },
+    {
+      "name": "cloudwatch-settings",
+      "source": "./plugins/cloudwatch-settings",
+      "description": "Claude Code と Codex CLI の OpenTelemetry メトリクスを Amazon CloudWatch へ直接送る設定を、1コマンドで行うスキル。API キーは表示せずに各設定ファイルへ書き込む — follow if you like : https://x.com/hawkieslab",
+      "author": { "name": "Hawkies' Lab", "url": "https://x.com/hawkieslab" }
     }
   ]
 }
