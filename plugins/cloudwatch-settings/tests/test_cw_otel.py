@@ -180,7 +180,7 @@ class CwOtelTest(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(f.stat().st_mode), 0o600, f)
 
         rc = (self.home / ".zshrc").read_text()
-        self.assertIn("export OTEL_RESOURCE_ATTRIBUTES='host.name=macbook", rc)
+        self.assertIn("export OTEL_RESOURCE_ATTRIBUTES=host.name=macbook", rc)
         self.assertEqual(self.calls(), [], "file からの取り込みでは AWS を呼ばない")
 
     def test_apply_is_idempotent(self):
@@ -301,6 +301,38 @@ class CwOtelTest(unittest.TestCase):
         out = self.aws_apply("--age-days", "90", expect_ok=False)
         self.assertEqual(out["error"]["code"], "conflict_codex")
         self.assertEqual(self.calls(), [])
+
+    def test_codex_inline_otel_table_is_rejected_before_key_creation(self):
+        self.settings.parent.mkdir()
+        self.settings.write_text('{"env": {"FOO": "bar"}}')
+        self.codex.parent.mkdir()
+        self.codex.write_text('otel = { environment = "dev" }\n')
+        out = self.aws_apply("--age-days", "90", expect_ok=False)
+        self.assertEqual(out["error"]["code"], "invalid_codex_toml")
+        self.assertEqual(self.calls(), [], "キーを作る前に止まる")
+        self.assertEqual(self.settings.read_text(), '{"env": {"FOO": "bar"}}')
+
+    def test_failed_write_restores_files_and_deletes_new_key(self):
+        self.settings.parent.mkdir()
+        self.settings.write_text('{"env": {"FOO": "bar"}}')
+        (self.home / ".codex").write_text("ディレクトリではない")  # Codex 側の書き込みを失敗させる
+        out = self.aws_apply("--age-days", "90", expect_ok=False)
+        self.assertEqual(out["error"]["code"], "write_failed")
+        self.assertTrue(out["error"]["new_key_deleted"])
+        self.assertEqual(out["error"]["restored"], [str(self.settings)])
+        self.assertEqual(self.settings.read_text(), '{"env": {"FOO": "bar"}}')
+        db = json.loads(self.db.read_text())
+        self.assertEqual(db["users"]["coding-agents-otel-evo-x2"]["creds"], [])
+
+    def test_shell_block_quotes_awkward_attribute_values(self):
+        value = "O'Reilly$(touch${IFS}pwned)`id`"
+        self.apply_file("--attr", f"department={value}")
+        rc = self.home / ".zshrc"
+        cp = subprocess.run(["bash", "-c", f'source "{rc}" && printf %s "$OTEL_RESOURCE_ATTRIBUTES"'],
+                            capture_output=True, text=True, cwd=str(self.tmp))
+        self.assertEqual(cp.returncode, 0, cp.stderr)
+        self.assertIn(f"department={value}", cp.stdout)
+        self.assertFalse((self.tmp / "pwned").exists())
 
     # ---- existing / remove / verify / dashboards
 

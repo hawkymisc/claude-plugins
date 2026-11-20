@@ -23,6 +23,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -510,10 +511,10 @@ def shell_env_apply(attrs: dict) -> dict:
     rc = shell_rc_path()
     if rc is None:
         return {"kind": "unsupported-shell", "skipped": True,
-                "manual_line": f"export OTEL_RESOURCE_ATTRIBUTES='{value}'"}
+                "manual_line": f"export OTEL_RESOURCE_ATTRIBUTES={shlex.quote(value)}"}
     rest = BLOCK_RE.sub("", read_text(rc)) if rc.exists() else ""
     rest = rest.rstrip("\n")
-    block = f"{BLOCK_BEGIN}\nexport OTEL_RESOURCE_ATTRIBUTES='{value}'\n{BLOCK_END}\n"
+    block = f"{BLOCK_BEGIN}\nexport OTEL_RESOURCE_ATTRIBUTES={shlex.quote(value)}\n{BLOCK_END}\n"
     mode = (rc.stat().st_mode & 0o777) if rc.exists() else 0o644
     rc.parent.mkdir(parents=True, exist_ok=True)
     rc.write_text((rest + "\n\n" if rest else "") + block, encoding="utf-8")
@@ -782,6 +783,8 @@ def cmd_apply(args) -> None:
             c = codex_unmanaged_conflict(rest, p)
             if c:
                 conflicts["codex"] = [c]
+            else:  # 追記後も TOML として正しいかを、仮の値で先に確かめる（キーを作る前）
+                codex_new_text(args.region, "placeholder-token-0000000000")
         plan["files"].append(str(p))
     if conflicts.get("codex"):
         raise Fail("conflict_codex",
@@ -842,17 +845,32 @@ def cmd_apply(args) -> None:
             raise Fail("no_token", "設定済みのトークンが見つからない")
         token = validate_token(tok, "既存の設定")
 
-    # 3. 書き込む
-    written = []
+    # 3. 書き込む。全ファイルの新しい内容を先に作り、途中で失敗したら書いた分を元に戻す
+    written, originals = [], {}
     try:
+        pending = []
         if "claude" in targets:
-            write_private(claude_settings_path(),
-                          dump_settings(claude_apply(settings, args.region, token, attrs)))
-            written.append(str(claude_settings_path()))
+            pending.append((claude_settings_path(),
+                            dump_settings(claude_apply(settings, args.region, token, attrs))))
         if "codex" in targets:
-            write_private(codex_config_path(), codex_new_text(args.region, token))
-            written.append(str(codex_config_path()))
+            pending.append((codex_config_path(), codex_new_text(args.region, token)))
+        for path, _ in pending:
+            originals[path] = read_text(path) if path.exists() else None
+        for path, text in pending:
+            write_private(path, text)
+            written.append(str(path))
     except Exception as e:
+        restored = []
+        for path_str in written:
+            path = Path(path_str)
+            try:
+                if originals.get(path) is None:
+                    path.unlink()
+                else:
+                    write_private(path, originals[path], backup=False)
+                restored.append(path_str)
+            except Exception:
+                pass
         rolled_back = False
         if key_info.get("credential_id"):
             try:
@@ -862,7 +880,7 @@ def cmd_apply(args) -> None:
                 pass
         msg = e.message if isinstance(e, Fail) else f"{type(e).__name__}"
         raise Fail("write_failed", f"設定ファイルを書けなかった: {msg}",
-                   written=written, new_key_deleted=rolled_back)
+                   written=written, restored=restored, new_key_deleted=rolled_back)
 
     shell_result = None
     if shell_mode == "auto":

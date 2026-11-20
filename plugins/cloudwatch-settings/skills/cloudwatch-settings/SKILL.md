@@ -207,7 +207,7 @@ AWS が公開している定義（aws-observability-accelerator）を取得し�
 | `aws_failed` | `message` に AWS CLI のエラーが入っている。権限不足（`iam:CreateUser`、`iam:AttachUserPolicy`、`iam:CreateServiceSpecificCredential`、`cloudwatch:PutDashboard`）、または AWS CLI が古い。原因を示し、コンソールでキーを作る方法に切り替えるか聞く |
 | `no_token` / `bad_token` / `no_clipboard` | コピーし直すか、ファイルで渡してもらう |
 | `invalid_settings_json` / `invalid_codex_toml` | 既存の設定ファイルが壊れている。該当箇所を示し、直してよいか聞く |
-| `write_failed` | 書き込みに失敗した。`new_key_deleted` が `true` なら、作りかけのキーは消えている。`false` なら、`error` の内容とともに、IAM に使われないキーが残っていることを報告する |
+| `write_failed` | 書き込みに失敗した。途中まで書いたファイルは元の内容に戻してある（`restored`）。`written` にあって `restored` にないファイルがあれば、それを報告する。`new_key_deleted` が `true` なら、作りかけのキーは消えている。`false` なら、IAM に使われないキーが残っていることを報告する |
 
 Codex が起動時に設定エラーを出すようになったら、`codex --version` を確かめる。この設定は Codex の設定スキーマ（`[otel.metrics_exporter.otlp-http]` の `endpoint`・`protocol`・`headers`）に合わせてあるが、キー名は版によって変わりうる。合わないと分かったら、`remove --targets codex` で戻してから報告する。
 
